@@ -1,6 +1,6 @@
 # AI Cyber Threat Intelligence Platform
 
-An explainable cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals. The current milestone provides a tested FastAPI backend and URL-analysis engine; the React dashboard and trained ML classifier are the next development stage.
+An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals. It combines a tested FastAPI analysis API with a responsive React operations dashboard.
 
 ## Current milestone
 
@@ -8,6 +8,8 @@ An explainable cybersecurity platform for detecting suspicious URLs, scoring ris
 - Explainable phishing-risk scoring
 - Detection of IP-based hosts, suspicious keywords, URL shorteners, punycode, excessive subdomains, unusual ports and insecure HTTP
 - REST API with interactive Swagger documentation
+- Responsive React dashboard with session statistics and scan history
+- Configurable API URL for local and hosted environments
 - Health endpoint
 - Unit and API tests
 - Docker and GitHub Actions support
@@ -15,7 +17,7 @@ An explainable cybersecurity platform for detecting suspicious URLs, scoring ris
 ## Architecture
 
 ```text
-Client / React dashboard (next milestone)
+        React dashboard
                 |
                 v
           FastAPI REST API
@@ -24,7 +26,7 @@ Client / React dashboard (next milestone)
     URL feature and risk engine
                 |
                 v
- ML classifier + PostgreSQL (planned)
+ ML classifier + PostgreSQL (roadmap)
 ```
 
 ## API
@@ -64,6 +66,8 @@ Other endpoints:
 
 ## Run locally
 
+Start the API:
+
 ```bash
 git clone https://github.com/ANKITJOSHI1605/AI-Cyber-Threat-Platform.git
 cd AI-Cyber-Threat-Platform
@@ -73,7 +77,17 @@ pip install -r backend/requirements.txt
 uvicorn backend.app.main:app --reload
 ```
 
-Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+In another terminal, start the dashboard:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). API documentation is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+For a hosted API, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_URL`.
 
 ## Tests
 
@@ -93,14 +107,14 @@ docker run -p 8000:8000 cyber-threat-api
 - [x] Explainable URL-risk engine
 - [x] FastAPI endpoints and automated tests
 - [x] Docker and continuous integration
+- [x] Build React security dashboard
 - [ ] Train and evaluate phishing URL classifier
 - [ ] Store scans and incidents in PostgreSQL
 - [ ] Add JWT authentication and role-based access
-- [ ] Build React security dashboard
 - [ ] Integrate VirusTotal threat intelligence
 - [ ] Add network anomaly-detection module
 - [ ] Deploy frontend, API and database
 
 ## Technology stack
 
-Python, FastAPI, Pydantic, Pytest, Docker, GitHub Actions. Planned additions include scikit-learn/XGBoost, PostgreSQL and React.
+React, Vite, Python, FastAPI, Pydantic, Pytest, Docker and GitHub Actions. Planned additions include scikit-learn/XGBoost and PostgreSQL.
