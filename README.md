@@ -78,7 +78,7 @@ Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 ## Tests
 
 ```bash
-pytest backend/tests -q
+python -m pytest backend/tests -q
 ```
 
 ## Docker
