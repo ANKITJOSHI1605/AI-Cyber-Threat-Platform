@@ -1,6 +1,6 @@
 # AI Cyber Threat Intelligence Platform
 
-An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals.\n\n**[Open the live demo](https://ai-cyber-threat-platform.vercel.app)** It combines a tested FastAPI analysis API with a responsive React operations dashboard.
+An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals. It combines a tested FastAPI analysis API with a responsive React operations dashboard.
 
 ## Current milestone
 
@@ -14,6 +14,8 @@ An explainable full-stack cybersecurity platform for detecting suspicious URLs, 
 - Health endpoint
 - Unit and API tests
 - Docker and GitHub Actions support
+- Secure registration and login with salted PBKDF2 password hashing
+- Signed expiring access tokens and Viewer/Analyst/Admin role-based access
 
 ## Architecture
 
@@ -65,6 +67,10 @@ Other endpoints:
 - `GET /api/v1/health` — health check
 - `GET /api/v1/scans` — recent persisted scans
 - `GET /api/v1/summary` — dashboard totals
+- `POST /api/v1/auth/register` and `/auth/login` — account access
+- `GET /api/v1/auth/me` — current authenticated user
+- `POST/PATCH /api/v1/incidents` — Analyst/Admin case management
+- `GET /api/v1/reports/incidents.csv` — Analyst/Admin report export
 - `GET /docs` — Swagger UI
 
 ## Run locally
@@ -99,6 +105,12 @@ Backend configuration:
 | `PORT` | Hosted web-service port | `8000` |
 | `CORS_ORIGINS` | Comma-separated frontend URLs | Local Vite URLs |
 | `DATABASE_PATH` | SQLite database file | `data/threat_scans.db` |
+| `JWT_SECRET` | Stable secret used to sign access tokens | Random per process |
+| `ADMIN_EMAIL` | Creates the initial administrator on startup | None |
+| `ADMIN_PASSWORD` | Initial administrator password (10+ characters) | None |
+| `TOKEN_TTL_SECONDS` | Access-token lifetime | `28800` |
+
+In production, set a long random `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the hosting provider. Never commit these values. New registrations always receive the read-only `viewer` role; an Admin can promote users through the API.
 
 ## Tests
 
@@ -122,10 +134,10 @@ docker run -p 8000:8000 cyber-threat-api
 - [x] Persist scan history and dashboard statistics
 - [ ] Train and evaluate phishing URL classifier
 - [ ] Migrate SQLite persistence to PostgreSQL for multi-instance hosting
-- [ ] Add JWT authentication and role-based access
+- [x] Add signed-token authentication and role-based access
 - [ ] Integrate VirusTotal threat intelligence
-- [ ] Add network anomaly-detection module
-- [ ] Deploy frontend, API and database
+- [x] Add network anomaly-detection module
+- [x] Deploy frontend and API
 
 ## Technology stack
 

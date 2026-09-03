@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class URLAnalysisRequest(BaseModel):
@@ -86,3 +86,32 @@ class Incident(IncidentCreate):
     status: str
     created_at: str
     updated_at: str
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=2, max_length=100)
+    password: str = Field(min_length=10, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class User(BaseModel):
+    id: int
+    email: EmailStr
+    name: str
+    role: str
+    created_at: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: User
+
+
+class RoleUpdate(BaseModel):
+    role: str = Field(pattern="^(viewer|analyst|admin)$")

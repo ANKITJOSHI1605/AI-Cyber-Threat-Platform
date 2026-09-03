@@ -69,6 +69,55 @@ def initialize_database() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                name TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'viewer',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+
+def create_user(email: str, name: str, password_hash: str, role: str = "viewer") -> dict:
+    with database() as connection:
+        cursor = connection.execute(
+            "INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, ?)",
+            (email.strip().lower(), name.strip(), password_hash, role),
+        )
+        row = connection.execute("SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with database() as connection:
+        row = connection.execute("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (email.strip(),)).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    with database() as connection:
+        row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    with database() as connection:
+        rows = connection.execute("SELECT id, email, name, role, created_at FROM users ORDER BY id").fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_user_role(user_id: int, role: str) -> dict | None:
+    with database() as connection:
+        cursor = connection.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+        if not cursor.rowcount:
+            return None
+        row = connection.execute("SELECT id, email, name, role, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row)
 
 
 def save_scan(result: dict) -> dict:
