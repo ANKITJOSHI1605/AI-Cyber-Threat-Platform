@@ -9,6 +9,7 @@ An explainable full-stack cybersecurity platform for detecting suspicious URLs, 
 - Detection of IP-based hosts, suspicious keywords, URL shorteners, punycode, excessive subdomains, unusual ports and insecure HTTP
 - REST API with interactive Swagger documentation
 - Responsive React dashboard with session statistics and scan history
+- Persistent scan history and aggregate threat statistics using SQLite
 - Configurable API URL for local and hosted environments
 - Health endpoint
 - Unit and API tests
@@ -62,6 +63,8 @@ Other endpoints:
 
 - `GET /` — service information
 - `GET /api/v1/health` — health check
+- `GET /api/v1/scans` — recent persisted scans
+- `GET /api/v1/summary` — dashboard totals
 - `GET /docs` — Swagger UI
 
 ## Run locally
@@ -89,6 +92,14 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). API documentation is availa
 
 For a hosted API, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_URL`.
 
+Backend configuration:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Hosted web-service port | `8000` |
+| `CORS_ORIGINS` | Comma-separated frontend URLs | Local Vite URLs |
+| `DATABASE_PATH` | SQLite database file | `data/threat_scans.db` |
+
 ## Tests
 
 ```bash
@@ -108,8 +119,9 @@ docker run -p 8000:8000 cyber-threat-api
 - [x] FastAPI endpoints and automated tests
 - [x] Docker and continuous integration
 - [x] Build React security dashboard
+- [x] Persist scan history and dashboard statistics
 - [ ] Train and evaluate phishing URL classifier
-- [ ] Store scans and incidents in PostgreSQL
+- [ ] Migrate SQLite persistence to PostgreSQL for multi-instance hosting
 - [ ] Add JWT authentication and role-based access
 - [ ] Integrate VirusTotal threat intelligence
 - [ ] Add network anomaly-detection module

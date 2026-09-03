@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { analyzeUrl, API_URL } from './api';
+import { useEffect, useState } from 'react';
+import { analyzeUrl, API_URL, getRecentScans, getSummary } from './api';
 
 const examples = [
   'https://example.com',
@@ -17,12 +17,16 @@ function App() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [totals, setTotals] = useState({ scanned: 0, threats: 0, safe: 0 });
 
-  const totals = useMemo(() => ({
-    scanned: history.length,
-    threats: history.filter(item => item.verdict !== 'low_risk').length,
-    safe: history.filter(item => item.verdict === 'low_risk').length,
-  }), [history]);
+  useEffect(() => {
+    Promise.all([getRecentScans(), getSummary()])
+      .then(([scans, summary]) => {
+        setHistory(scans);
+        setTotals(summary);
+      })
+      .catch(() => setError('The API is starting or unavailable. You can retry a scan shortly.'));
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -32,7 +36,12 @@ function App() {
     try {
       const analysis = await analyzeUrl(url);
       setResult(analysis);
-      setHistory(current => [analysis, ...current.filter(item => item.normalized_url !== analysis.normalized_url)].slice(0, 6));
+      setHistory(current => [analysis, ...current].slice(0, 20));
+      setTotals(current => ({
+        scanned: current.scanned + 1,
+        threats: current.threats + (analysis.verdict === 'low_risk' ? 0 : 1),
+        safe: current.safe + (analysis.verdict === 'low_risk' ? 1 : 0),
+      }));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -118,7 +127,7 @@ function App() {
             <button key={item.normalized_url} onClick={() => setResult(item)}>
               <span className={`verdict-dot ${item.verdict}`} /><span>{item.normalized_url}</span><b>{item.risk_score}</b><em>{item.verdict.replace('_', ' ')}</em>
             </button>
-          )) : <p className="empty-history">Your analyzed URLs will appear here.</p>}
+          )) : <p className="empty-history">Analyzed URLs will appear here and remain available after refresh.</p>}
         </section>
       </main>
     </div>

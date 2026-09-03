@@ -13,3 +13,12 @@ export async function analyzeUrl(url) {
   }
   return data;
 }
+
+async function getJson(path) {
+  const response = await fetch(`${API_URL}${path}`);
+  if (!response.ok) throw new Error('The security service is unavailable.');
+  return response.json();
+}
+
+export const getRecentScans = () => getJson('/api/v1/scans?limit=20');
+export const getSummary = () => getJson('/api/v1/summary');

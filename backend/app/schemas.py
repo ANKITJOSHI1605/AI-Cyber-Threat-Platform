@@ -26,3 +26,14 @@ class URLAnalysisResponse(BaseModel):
     risk_score: int = Field(ge=0, le=100)
     signals: list[RiskSignal]
     features: URLFeatures
+
+
+class ScanRecord(URLAnalysisResponse):
+    id: int
+    created_at: str
+
+
+class ScanSummary(BaseModel):
+    scanned: int
+    threats: int
+    safe: int
