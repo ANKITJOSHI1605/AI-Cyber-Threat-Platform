@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { analyzeUrl, API_URL, getRecentScans, getSummary } from './api';
 
 const examples = [
