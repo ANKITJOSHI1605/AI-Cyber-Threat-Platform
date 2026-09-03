@@ -1,6 +1,6 @@
 # AI Cyber Threat Intelligence Platform
 
-An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals. It combines a tested FastAPI analysis API with a responsive React operations dashboard.
+An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals.\n\n**[Open the live demo](https://ai-cyber-threat-platform.vercel.app)** It combines a tested FastAPI analysis API with a responsive React operations dashboard.
 
 ## Current milestone
 
