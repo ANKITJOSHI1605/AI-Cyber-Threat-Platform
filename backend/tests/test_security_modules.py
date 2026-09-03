@@ -43,3 +43,14 @@ def test_incident_workflow() -> None:
     assert updated.status_code == 200
     assert updated.json()["status"] == "investigating"
     assert any(item["id"] == incident_id for item in client.get("/api/v1/incidents").json())
+
+
+def test_analytics_and_csv_report() -> None:
+    analytics = client.get("/api/v1/analytics")
+    report = client.get("/api/v1/reports/incidents.csv")
+
+    assert analytics.status_code == 200
+    assert {"url_verdicts", "event_verdicts", "incidents"} <= analytics.json().keys()
+    assert report.status_code == 200
+    assert report.headers["content-type"].startswith("text/csv")
+    assert "severity,status,source" in report.text

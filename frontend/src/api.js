@@ -37,5 +37,6 @@ async function postJson(path, payload, method = 'POST') {
 export const analyzeEmail = payload => postJson('/api/v1/analyze-email', payload);
 export const analyzeNetwork = payload => postJson('/api/v1/analyze-network', payload);
 export const getIncidents = () => getJson('/api/v1/incidents');
+export const getAnalytics = () => getJson('/api/v1/analytics');
 export const createIncident = payload => postJson('/api/v1/incidents', payload);
 export const setIncidentStatus = (id, status) => postJson(`/api/v1/incidents/${id}`, { status }, 'PATCH');

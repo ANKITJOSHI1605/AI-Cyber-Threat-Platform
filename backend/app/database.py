@@ -55,6 +55,20 @@ def initialize_database() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS security_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_type TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                risk_score INTEGER NOT NULL,
+                summary TEXT NOT NULL,
+                signals TEXT NOT NULL,
+                features TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
 
 def save_scan(result: dict) -> dict:
@@ -136,3 +150,30 @@ def update_incident_status(incident_id: int, status: str) -> dict | None:
             return None
         row = connection.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone()
     return dict(row)
+
+
+def save_security_event(result: dict) -> dict:
+    with database() as connection:
+        cursor = connection.execute(
+            """INSERT INTO security_events
+            (analysis_type, verdict, risk_score, summary, signals, features)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            (result["analysis_type"], result["verdict"], result["risk_score"], result["summary"], json.dumps(result["signals"]), json.dumps(result["features"])),
+        )
+        row = connection.execute("SELECT * FROM security_events WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    event = dict(row)
+    event["signals"] = json.loads(event["signals"])
+    event["features"] = json.loads(event["features"])
+    return event
+
+
+def analytics_summary() -> dict:
+    with database() as connection:
+        url_rows = connection.execute("SELECT verdict, COUNT(*) count, AVG(risk_score) average FROM scans GROUP BY verdict").fetchall()
+        event_rows = connection.execute("SELECT analysis_type, verdict, COUNT(*) count, AVG(risk_score) average FROM security_events GROUP BY analysis_type, verdict").fetchall()
+        incident_rows = connection.execute("SELECT severity, status, COUNT(*) count FROM incidents GROUP BY severity, status").fetchall()
+    return {
+        "url_verdicts": [dict(row) for row in url_rows],
+        "event_verdicts": [dict(row) for row in event_rows],
+        "incidents": [dict(row) for row in incident_rows],
+    }

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { analyzeEmail, analyzeNetwork, analyzeUrl, API_URL, createIncident, getIncidents, getRecentScans, getSummary, setIncidentStatus } from './api';
+import { analyzeEmail, analyzeNetwork, analyzeUrl, API_URL, createIncident, getAnalytics, getIncidents, getRecentScans, getSummary, setIncidentStatus } from './api';
 
 const examples = ['https://example.com', 'http://192.168.1.10/login/verify', 'https://secure-account-login.example.com/update'];
-const modules = [['url', '⌁', 'URL scanner'], ['email', '✉', 'Email analyzer'], ['network', '⌗', 'Network anomaly'], ['incidents', '◴', 'Incidents']];
+const modules = [['url', '⌁', 'URL scanner'], ['email', '✉', 'Email analyzer'], ['network', '⌗', 'Network anomaly'], ['incidents', '◴', 'Incidents'], ['analytics', '▥', 'Analytics']];
 
 function Signals({ result }) {
   if (!result) return <section className="panel empty-result"><span>⌁</span><h2>Ready to investigate</h2><p>Run an analysis to see a risk score and explainable security signals.</p></section>;
@@ -20,11 +20,12 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [analytics, setAnalytics] = useState({ url_verdicts: [], event_verdicts: [], incidents: [] });
   const [totals, setTotals] = useState({ scanned: 0, threats: 0, safe: 0 });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { Promise.all([getRecentScans(), getSummary(), getIncidents()]).then(([scans, summary, cases]) => { setHistory(scans); setTotals(summary); setIncidents(cases); }).catch(() => setError('The API is starting or unavailable. Retry shortly.')); }, []);
+  useEffect(() => { Promise.all([getRecentScans(), getSummary(), getIncidents(), getAnalytics()]).then(([scans, summary, cases, metrics]) => { setHistory(scans); setTotals(summary); setIncidents(cases); setAnalytics(metrics); }).catch(() => setError('The API is starting or unavailable. Retry shortly.')); }, []);
 
   async function run(event, analyzer, payload) {
     event.preventDefault(); setLoading(true); setError('');
@@ -58,6 +59,7 @@ export default function App() {
       {active === 'network' && <><section className="panel scanner"><div className="panel-heading"><div><p className="eyebrow">ANOMALY DETECTION</p><h2>Evaluate a network security event</h2></div><span className="engine-badge">● Baseline ready</span></div><form className="network-form" onSubmit={e => run(e, analyzeNetwork, network)}><label>Failed logins<input type="number" min="0" value={network.failed_login_count} onChange={e => setNetwork({ ...network, failed_login_count: Number(e.target.value) })} /></label><label>Requests/minute<input type="number" min="0" value={network.requests_per_minute} onChange={e => setNetwork({ ...network, requests_per_minute: Number(e.target.value) })} /></label><label>Outbound bytes<input type="number" min="0" value={network.bytes_out} onChange={e => setNetwork({ ...network, bytes_out: Number(e.target.value) })} /></label><label>Hour (0–23)<input type="number" min="0" max="23" value={network.hour} onChange={e => setNetwork({ ...network, hour: Number(e.target.value) })} /></label><label className="check"><input type="checkbox" checked={network.is_new_country} onChange={e => setNetwork({ ...network, is_new_country: e.target.checked })} /> New source country</label><label className="check"><input type="checkbox" checked={network.privileged_action} onChange={e => setNetwork({ ...network, privileged_action: e.target.checked })} /> Privileged action</label><button disabled={loading}>Analyze event →</button></form></section><Signals result={result} />{result && result.risk_score >= 30 && <button className="escalate" onClick={escalate}>Create security incident</button>}</>}
 
       {active === 'incidents' && <section className="panel incident-list"><div className="panel-heading"><div><p className="eyebrow">CASE MANAGEMENT</p><h2>Security incidents</h2></div><span>{incidents.length} cases</span></div>{incidents.length ? incidents.map(item => <article key={item.id}><span className={`severity ${item.severity}`}>{item.severity}</span><div><h3>{item.title}</h3><p>{item.description}</p><small>{item.source} · {item.created_at}</small></div><select value={item.status} onChange={e => changeStatus(item.id, e.target.value)}><option value="open">Open</option><option value="investigating">Investigating</option><option value="resolved">Resolved</option></select></article>) : <div className="empty-state"><p>No incidents have been created.</p></div>}</section>}
+      {active === 'analytics' && <section className="panel analytics"><div className="panel-heading"><div><p className="eyebrow">THREAT METRICS</p><h2>Analysis overview</h2></div><a className="docs-link" href={`${API_URL}/api/v1/reports/incidents.csv`}>Export incident CSV</a></div><h3>URL verdicts</h3>{analytics.url_verdicts.length ? analytics.url_verdicts.map(item => <div className="metric" key={item.verdict}><span>{item.verdict.replace('_', ' ')}</span><div><i style={{ width: `${Math.min(100, item.count * 10)}%` }} /></div><b>{item.count}</b><small>avg {Math.round(item.average)}</small></div>) : <p className="empty-history">No URL metrics yet.</p>}<h3>Security engines</h3>{analytics.event_verdicts.length ? analytics.event_verdicts.map(item => <div className="metric" key={`${item.analysis_type}-${item.verdict}`}><span>{item.analysis_type} · {item.verdict.replace('_', ' ')}</span><div><i style={{ width: `${Math.min(100, item.count * 10)}%` }} /></div><b>{item.count}</b><small>avg {Math.round(item.average)}</small></div>) : <p className="empty-history">Run an email or network analysis to create metrics.</p>}</section>}
       {error && <p className="error" role="alert">{error}</p>}
     </main>
   </div>;

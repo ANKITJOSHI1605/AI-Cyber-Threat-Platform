@@ -60,6 +60,14 @@ class SecurityAnalysisResponse(BaseModel):
     signals: list[RiskSignal]
     features: dict
     summary: str
+    id: int | None = None
+    created_at: str | None = None
+
+
+class AnalyticsSummary(BaseModel):
+    url_verdicts: list[dict]
+    event_verdicts: list[dict]
+    incidents: list[dict]
 
 
 class IncidentCreate(BaseModel):

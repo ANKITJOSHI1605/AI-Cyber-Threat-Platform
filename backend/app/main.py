@@ -1,10 +1,13 @@
 import os
+import csv
+import io
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import create_incident, initialize_database, list_incidents, list_scans, save_scan, scan_summary, update_incident_status
-from .schemas import EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, NetworkAnalysisRequest, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest
+from .database import analytics_summary, create_incident, initialize_database, list_incidents, list_scans, save_scan, save_security_event, scan_summary, update_incident_status
+from .schemas import AnalyticsSummary, EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, NetworkAnalysisRequest, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest
 from .services.security_analyzer import analyze_email, analyze_network_event
 from .services.url_analyzer import analyze_url
 
@@ -69,14 +72,14 @@ def summary() -> ScanSummary:
 @app.post("/api/v1/analyze-email", response_model=SecurityAnalysisResponse)
 def analyze_email_endpoint(payload: EmailAnalysisRequest) -> SecurityAnalysisResponse:
     try:
-        return SecurityAnalysisResponse(**analyze_email(payload.text, payload.sender))
+        return SecurityAnalysisResponse(**save_security_event(analyze_email(payload.text, payload.sender)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/analyze-network", response_model=SecurityAnalysisResponse)
 def analyze_network_endpoint(payload: NetworkAnalysisRequest) -> SecurityAnalysisResponse:
-    return SecurityAnalysisResponse(**analyze_network_event(payload.model_dump()))
+    return SecurityAnalysisResponse(**save_security_event(analyze_network_event(payload.model_dump())))
 
 
 @app.get("/api/v1/incidents", response_model=list[Incident])
@@ -95,3 +98,18 @@ def change_incident_status(incident_id: int, payload: IncidentStatusUpdate) -> I
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     return Incident(**incident)
+
+
+@app.get("/api/v1/analytics", response_model=AnalyticsSummary)
+def analytics() -> AnalyticsSummary:
+    return AnalyticsSummary(**analytics_summary())
+
+
+@app.get("/api/v1/reports/incidents.csv")
+def incident_report() -> StreamingResponse:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "title", "severity", "status", "source", "created_at", "updated_at", "description"])
+    for item in list_incidents(100):
+        writer.writerow([item[key] for key in ("id", "title", "severity", "status", "source", "created_at", "updated_at", "description")])
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sentinel-incidents.csv"})
