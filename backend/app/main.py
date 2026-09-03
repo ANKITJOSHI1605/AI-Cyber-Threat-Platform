@@ -3,8 +3,9 @@ import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import initialize_database, list_scans, save_scan, scan_summary
-from .schemas import ScanRecord, ScanSummary, URLAnalysisRequest, URLAnalysisResponse
+from .database import create_incident, initialize_database, list_incidents, list_scans, save_scan, scan_summary, update_incident_status
+from .schemas import EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, NetworkAnalysisRequest, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest
+from .services.security_analyzer import analyze_email, analyze_network_event
 from .services.url_analyzer import analyze_url
 
 
@@ -63,3 +64,34 @@ def recent_scans(limit: int = Query(default=20, ge=1, le=100)) -> list[ScanRecor
 @app.get("/api/v1/summary", response_model=ScanSummary)
 def summary() -> ScanSummary:
     return ScanSummary(**scan_summary())
+
+
+@app.post("/api/v1/analyze-email", response_model=SecurityAnalysisResponse)
+def analyze_email_endpoint(payload: EmailAnalysisRequest) -> SecurityAnalysisResponse:
+    try:
+        return SecurityAnalysisResponse(**analyze_email(payload.text, payload.sender))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/analyze-network", response_model=SecurityAnalysisResponse)
+def analyze_network_endpoint(payload: NetworkAnalysisRequest) -> SecurityAnalysisResponse:
+    return SecurityAnalysisResponse(**analyze_network_event(payload.model_dump()))
+
+
+@app.get("/api/v1/incidents", response_model=list[Incident])
+def incidents(limit: int = Query(default=50, ge=1, le=100)) -> list[Incident]:
+    return [Incident(**item) for item in list_incidents(limit)]
+
+
+@app.post("/api/v1/incidents", response_model=Incident, status_code=201)
+def add_incident(payload: IncidentCreate) -> Incident:
+    return Incident(**create_incident(payload.model_dump()))
+
+
+@app.patch("/api/v1/incidents/{incident_id}", response_model=Incident)
+def change_incident_status(incident_id: int, payload: IncidentStatusUpdate) -> Incident:
+    incident = update_incident_status(incident_id, payload.status)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return Incident(**incident)
