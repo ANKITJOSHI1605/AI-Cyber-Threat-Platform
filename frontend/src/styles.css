@@ -89,3 +89,10 @@ form label { display: block; color: #8ea1aa; font-size: 12px; margin-bottom: 8px
 .account-panel form button, .account-panel > button { border: 0; border-radius: 8px; padding: 12px 18px; background: #35dfb0; color: #042019; font-weight: 700; cursor: pointer; }
 .account-panel .text-button { display: block; color: #8ea3ac; background: transparent; padding-left: 0; margin-top: 14px; font-weight: 500; }
 .role-badge { display: inline-block; color: #35dfb0; background: #0e2925; border: 1px solid #17483e; padding: 6px 10px; border-radius: 99px; text-transform: uppercase; font: 10px 'Space Mono'; margin-bottom: 16px; }
+.admin-console { margin-top: 30px; padding-top: 22px; border-top: 1px solid #20343b; }
+.admin-console h3 { margin: 22px 0 10px; color: #b9c8ce; font-size: 14px; }
+.user-row { display: grid; grid-template-columns: 1fr 130px; gap: 15px; align-items: center; padding: 11px 0; border-top: 1px solid #182a31; }
+.user-row div { display: grid; gap: 4px; }.user-row small { color: #687d86; }
+.user-row select { color: #dce9ed; background: #071116; border: 1px solid #29414b; border-radius: 7px; padding: 8px; }
+.audit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; padding: 10px 0; border-top: 1px solid #182a31; font-size: 11px; }
+.audit-row strong { color: #35dfb0; }.audit-row span, .audit-row small { color: #71858e; }.audit-row small { grid-column: 1 / -1; }

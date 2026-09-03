@@ -16,6 +16,7 @@ An explainable full-stack cybersecurity platform for detecting suspicious URLs, 
 - Docker and GitHub Actions support
 - Secure registration and login with salted PBKDF2 password hashing
 - Signed expiring access tokens and Viewer/Analyst/Admin role-based access
+- Admin user-role console and persistent security audit trail
 
 ## Architecture
 
@@ -69,6 +70,8 @@ Other endpoints:
 - `GET /api/v1/summary` — dashboard totals
 - `POST /api/v1/auth/register` and `/auth/login` — account access
 - `GET /api/v1/auth/me` — current authenticated user
+- `GET /api/v1/users` and `PATCH /users/{id}/role` — Admin role management
+- `GET /api/v1/audit-logs` — Admin security activity trail
 - `POST/PATCH /api/v1/incidents` — Analyst/Admin case management
 - `GET /api/v1/reports/incidents.csv` — Analyst/Admin report export
 - `GET /docs` — Swagger UI

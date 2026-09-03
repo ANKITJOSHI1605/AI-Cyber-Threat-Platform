@@ -14,6 +14,11 @@ def analyst_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(user)}"}
 
 
+def admin_headers() -> dict[str, str]:
+    user = create_user(f"admin-{uuid4()}@example.com", "Test Admin", hash_password("strong-test-password"), "admin")
+    return {"Authorization": f"Bearer {create_access_token(user)}"}
+
+
 def test_phishing_email_analysis() -> None:
     response = client.post("/api/v1/analyze-email", json={
         "sender": "security-team@gmail.com",
@@ -80,3 +85,19 @@ def test_registration_login_and_viewer_permissions() -> None:
 
 def test_protected_endpoint_requires_authentication() -> None:
     assert client.get("/api/v1/reports/incidents.csv").status_code == 401
+
+
+def test_admin_can_manage_roles_and_read_audit_log() -> None:
+    viewer_email = f"managed-{uuid4()}@example.com"
+    viewer = client.post("/api/v1/auth/register", json={"email": viewer_email, "name": "Managed Viewer", "password": "secure-demo-password"}).json()["user"]
+    headers = admin_headers()
+    updated = client.patch(f"/api/v1/users/{viewer['id']}/role", headers=headers, json={"role": "analyst"})
+    assert updated.status_code == 200
+    assert updated.json()["role"] == "analyst"
+    logs = client.get("/api/v1/audit-logs", headers=headers)
+    assert logs.status_code == 200
+    assert any(entry["action"] == "user.role_changed" for entry in logs.json())
+
+
+def test_non_admin_cannot_list_users() -> None:
+    assert client.get("/api/v1/users", headers=analyst_headers()).status_code == 403

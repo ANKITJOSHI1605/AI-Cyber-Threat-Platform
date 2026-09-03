@@ -47,6 +47,9 @@ export const setIncidentStatus = (id, status) => postJson(`/api/v1/incidents/${i
 export const login = async payload => { const data = await postJson('/api/v1/auth/login', payload); localStorage.setItem(tokenKey, data.access_token); return data.user; };
 export const register = async payload => { const data = await postJson('/api/v1/auth/register', payload); localStorage.setItem(tokenKey, data.access_token); return data.user; };
 export const getMe = () => getJson('/api/v1/auth/me', true);
+export const getUsers = () => getJson('/api/v1/users', true);
+export const getAuditLogs = () => getJson('/api/v1/audit-logs?limit=50', true);
+export const setUserRole = (id, role) => postJson(`/api/v1/users/${id}/role`, { role }, 'PATCH', true);
 export async function downloadIncidentReport() {
   const response = await fetch(`${API_URL}/api/v1/reports/incidents.csv`, { headers: authHeaders() });
   if (!response.ok) { const data = await response.json(); throw new Error(data.detail || 'Report export failed.'); }

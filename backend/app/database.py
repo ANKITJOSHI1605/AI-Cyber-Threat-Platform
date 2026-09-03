@@ -81,6 +81,19 @@ def initialize_database() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor_id INTEGER,
+                actor_email TEXT,
+                action TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
 
 def create_user(email: str, name: str, password_hash: str, role: str = "viewer") -> dict:
@@ -118,6 +131,20 @@ def update_user_role(user_id: int, role: str) -> dict | None:
             return None
         row = connection.execute("SELECT id, email, name, role, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
     return dict(row)
+
+
+def record_audit(action: str, resource: str, actor: dict | None = None, details: str = "") -> None:
+    with database() as connection:
+        connection.execute(
+            "INSERT INTO audit_logs (actor_id, actor_email, action, resource, details) VALUES (?, ?, ?, ?, ?)",
+            (actor["id"] if actor else None, actor["email"] if actor else None, action, resource, details[:1000]),
+        )
+
+
+def list_audit_logs(limit: int = 100) -> list[dict]:
+    with database() as connection:
+        rows = connection.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(row) for row in rows]
 
 
 def save_scan(result: dict) -> dict:

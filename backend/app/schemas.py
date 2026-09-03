@@ -115,3 +115,13 @@ class AuthResponse(BaseModel):
 
 class RoleUpdate(BaseModel):
     role: str = Field(pattern="^(viewer|analyst|admin)$")
+
+
+class AuditLog(BaseModel):
+    id: int
+    actor_id: int | None
+    actor_email: str | None
+    action: str
+    resource: str
+    details: str
+    created_at: str

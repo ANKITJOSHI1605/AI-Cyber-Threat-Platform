@@ -8,8 +8,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import create_access_token, current_user, hash_password, require_roles, verify_password
-from .database import analytics_summary, create_incident, create_user, get_user_by_email, initialize_database, list_incidents, list_scans, list_users, save_scan, save_security_event, scan_summary, update_incident_status, update_user_role
-from .schemas import AnalyticsSummary, AuthResponse, EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, LoginRequest, NetworkAnalysisRequest, RegisterRequest, RoleUpdate, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest, User
+from .database import analytics_summary, create_incident, create_user, get_user_by_email, initialize_database, list_audit_logs, list_incidents, list_scans, list_users, record_audit, save_scan, save_security_event, scan_summary, update_incident_status, update_user_role
+from .schemas import AnalyticsSummary, AuditLog, AuthResponse, EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, LoginRequest, NetworkAnalysisRequest, RegisterRequest, RoleUpdate, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest, User
 from .services.security_analyzer import analyze_email, analyze_network_event
 from .services.url_analyzer import analyze_url
 
@@ -66,6 +66,7 @@ def register(payload: RegisterRequest) -> AuthResponse:
         user = create_user(payload.email, payload.name, hash_password(payload.password))
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
+    record_audit("account.registered", f"user:{user['id']}", user)
     return AuthResponse(access_token=create_access_token(user), user=public_user(user))
 
 
@@ -74,6 +75,7 @@ def login(payload: LoginRequest) -> AuthResponse:
     user = get_user_by_email(payload.email)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    record_audit("account.login", f"user:{user['id']}", user)
     return AuthResponse(access_token=create_access_token(user), user=public_user(user))
 
 
@@ -87,6 +89,11 @@ def users(_: dict = Depends(require_roles("admin"))) -> list[User]:
     return [public_user(user) for user in list_users()]
 
 
+@app.get("/api/v1/audit-logs", response_model=list[AuditLog])
+def audit_logs(limit: int = Query(default=50, ge=1, le=200), _: dict = Depends(require_roles("admin"))) -> list[AuditLog]:
+    return [AuditLog(**entry) for entry in list_audit_logs(limit)]
+
+
 @app.patch("/api/v1/users/{user_id}/role", response_model=User)
 def change_user_role(user_id: int, payload: RoleUpdate, actor: dict = Depends(require_roles("admin"))) -> User:
     if user_id == actor["id"]:
@@ -94,6 +101,7 @@ def change_user_role(user_id: int, payload: RoleUpdate, actor: dict = Depends(re
     user = update_user_role(user_id, payload.role)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    record_audit("user.role_changed", f"user:{user_id}", actor, f"new_role={payload.role}")
     return public_user(user)
 
 
@@ -134,15 +142,18 @@ def incidents(limit: int = Query(default=50, ge=1, le=100)) -> list[Incident]:
 
 
 @app.post("/api/v1/incidents", response_model=Incident, status_code=201)
-def add_incident(payload: IncidentCreate, _: dict = Depends(require_roles("analyst", "admin"))) -> Incident:
-    return Incident(**create_incident(payload.model_dump()))
+def add_incident(payload: IncidentCreate, actor: dict = Depends(require_roles("analyst", "admin"))) -> Incident:
+    incident = create_incident(payload.model_dump())
+    record_audit("incident.created", f"incident:{incident['id']}", actor, f"severity={incident['severity']}")
+    return Incident(**incident)
 
 
 @app.patch("/api/v1/incidents/{incident_id}", response_model=Incident)
-def change_incident_status(incident_id: int, payload: IncidentStatusUpdate, _: dict = Depends(require_roles("analyst", "admin"))) -> Incident:
+def change_incident_status(incident_id: int, payload: IncidentStatusUpdate, actor: dict = Depends(require_roles("analyst", "admin"))) -> Incident:
     incident = update_incident_status(incident_id, payload.status)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
+    record_audit("incident.status_changed", f"incident:{incident_id}", actor, f"status={payload.status}")
     return Incident(**incident)
 
 
@@ -152,10 +163,11 @@ def analytics() -> AnalyticsSummary:
 
 
 @app.get("/api/v1/reports/incidents.csv")
-def incident_report(_: dict = Depends(require_roles("analyst", "admin"))) -> StreamingResponse:
+def incident_report(actor: dict = Depends(require_roles("analyst", "admin"))) -> StreamingResponse:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["id", "title", "severity", "status", "source", "created_at", "updated_at", "description"])
     for item in list_incidents(100):
         writer.writerow([item[key] for key in ("id", "title", "severity", "status", "source", "created_at", "updated_at", "description")])
+    record_audit("report.exported", "report:incidents.csv", actor)
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sentinel-incidents.csv"})
