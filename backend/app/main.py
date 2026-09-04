@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import create_access_token, current_user, hash_password, require_roles, verify_password
-from .database import analytics_summary, create_incident, create_user, get_user_by_email, initialize_database, list_audit_logs, list_incidents, list_scans, list_users, record_audit, save_scan, save_security_event, scan_summary, update_incident_status, update_user_role
+from .database import analytics_summary, create_incident, create_user, get_user_by_email, initialize_database, list_audit_logs, list_incidents, list_scans, list_users, record_audit, save_scan, save_security_event, scan_summary, update_incident_status, update_user_role, upsert_admin
 from .schemas import AnalyticsSummary, AuditLog, AuthResponse, EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, LoginRequest, NetworkAnalysisRequest, RegisterRequest, RoleUpdate, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest, User
 from .services.security_analyzer import analyze_email, analyze_network_event
 from .services.url_analyzer import analyze_url
@@ -22,8 +22,8 @@ app = FastAPI(
 
 initialize_database()
 
-if os.getenv("ADMIN_EMAIL") and os.getenv("ADMIN_PASSWORD") and not get_user_by_email(os.environ["ADMIN_EMAIL"]):
-    create_user(os.environ["ADMIN_EMAIL"], "Sentinel Administrator", hash_password(os.environ["ADMIN_PASSWORD"]), "admin")
+if os.getenv("ADMIN_EMAIL") and os.getenv("ADMIN_PASSWORD"):
+    upsert_admin(os.environ["ADMIN_EMAIL"], "Sentinel Administrator", hash_password(os.environ["ADMIN_PASSWORD"]))
 
 allowed_origins = [
     origin.strip()

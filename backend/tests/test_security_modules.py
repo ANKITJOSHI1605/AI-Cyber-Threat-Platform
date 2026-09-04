@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from uuid import uuid4
 
 from backend.app.auth import create_access_token, hash_password
-from backend.app.database import create_user
+from backend.app.database import create_user, get_user_by_email, upsert_admin
 from backend.app.main import app
 
 
@@ -101,3 +101,14 @@ def test_admin_can_manage_roles_and_read_audit_log() -> None:
 
 def test_non_admin_cannot_list_users() -> None:
     assert client.get("/api/v1/users", headers=analyst_headers()).status_code == 403
+
+
+def test_admin_bootstrap_promotes_existing_account_and_updates_password() -> None:
+    email = f"bootstrap-{uuid4()}@example.com"
+    create_user(email, "Old Viewer", hash_password("old-viewer-password"), "viewer")
+    admin = upsert_admin(email, "Sentinel Administrator", hash_password("new-admin-password"))
+    assert admin["role"] == "admin"
+    assert get_user_by_email(email)["name"] == "Sentinel Administrator"
+    login_response = client.post("/api/v1/auth/login", json={"email": email, "password": "new-admin-password"})
+    assert login_response.status_code == 200
+    assert login_response.json()["user"]["role"] == "admin"

@@ -133,6 +133,27 @@ def update_user_role(user_id: int, role: str) -> dict | None:
     return dict(row)
 
 
+def upsert_admin(email: str, name: str, password_hash: str) -> dict:
+    normalized_email = email.strip().lower()
+    with database() as connection:
+        existing = connection.execute(
+            "SELECT id FROM users WHERE email = ? COLLATE NOCASE", (normalized_email,)
+        ).fetchone()
+        if existing:
+            connection.execute(
+                "UPDATE users SET name = ?, password_hash = ?, role = 'admin' WHERE id = ?",
+                (name, password_hash, existing["id"]),
+            )
+            row = connection.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
+        else:
+            cursor = connection.execute(
+                "INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, 'admin')",
+                (normalized_email, name, password_hash),
+            )
+            row = connection.execute("SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
 def record_audit(action: str, resource: str, actor: dict | None = None, details: str = "") -> None:
     with database() as connection:
         connection.execute(
