@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "algorithm": "logistic_regression",
+  "features": [
+    "length",
+    "subdomains",
+    "digits",
+    "specials",
+    "https",
+    "ip_host"
+  ],
+  "means": [
+    57.85,
+    1.65,
+    4.9,
+    16.0,
+    0.65,
+    0.1
+  ],
+  "scales": [
+    77.15,
+    3.35,
+    12.1,
+    22.0,
+    1,
+    1
+  ],
+  "weights": [
+    2.7989255811451286,
+    3.7674072158417755,
+    3.8839824958699607,
+    3.263912641689014,
+    -3.7103042630766017,
+    1.9378946534917225
+  ],
+  "bias": 0.07876266194774276,
+  "training_samples": 20,
+  "training_accuracy": 1.0,
+  "dataset_note": "Small curated educational baseline; not a production benchmark."
+}

@@ -2,6 +2,8 @@ import ipaddress
 import re
 from urllib.parse import urlparse
 
+from .ml_url_classifier import predict
+
 
 SUSPICIOUS_KEYWORDS = {
     "account", "confirm", "login", "password", "secure", "signin",
@@ -77,7 +79,14 @@ def analyze_url(raw_url: str) -> dict:
             f"Sensitive terms detected: {', '.join(matched_keywords)}.",
         )
 
-    risk_score = min(100, sum(signal["weight"] for signal in signals))
+    features = {
+        "length": len(normalized_url), "subdomain_count": subdomain_count,
+        "digit_count": digit_count, "special_character_count": special_character_count,
+        "uses_https": parsed.scheme == "https", "host_is_ip": host_is_ip,
+    }
+    ml_prediction = predict(features)
+    rule_score = min(100, sum(signal["weight"] for signal in signals))
+    risk_score = round(rule_score * .7 + ml_prediction["probability"] * 100 * .3) if ml_prediction else rule_score
     verdict = "malicious" if risk_score >= 70 else "suspicious" if risk_score >= 30 else "low_risk"
 
     return {
@@ -85,12 +94,5 @@ def analyze_url(raw_url: str) -> dict:
         "verdict": verdict,
         "risk_score": risk_score,
         "signals": signals,
-        "features": {
-            "length": len(normalized_url),
-            "subdomain_count": subdomain_count,
-            "digit_count": digit_count,
-            "special_character_count": special_character_count,
-            "uses_https": parsed.scheme == "https",
-            "host_is_ip": host_is_ip,
-        },
+        "features": features | ({"ml_probability": ml_prediction["probability"]} if ml_prediction else {}),
     }

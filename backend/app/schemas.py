@@ -18,6 +18,7 @@ class URLFeatures(BaseModel):
     special_character_count: int
     uses_https: bool
     host_is_ip: bool
+    ml_probability: float | None = None
 
 
 class URLAnalysisResponse(BaseModel):

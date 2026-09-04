@@ -34,3 +34,10 @@ def test_scan_history_and_summary_endpoints() -> None:
 def test_invalid_url_returns_validation_error() -> None:
     response = client.post("/api/v1/analyze-url", json={"url": "http://"})
     assert response.status_code == 422
+
+
+def test_threat_intelligence_has_safe_unconfigured_fallback(monkeypatch) -> None:
+    monkeypatch.delenv("VIRUSTOTAL_API_KEY", raising=False)
+    response = client.post("/api/v1/threat-intelligence", json={"url": "https://example.com"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "not_configured"

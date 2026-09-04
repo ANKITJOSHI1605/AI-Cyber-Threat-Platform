@@ -17,6 +17,7 @@ export async function analyzeUrl(url) {
   }
   return data;
 }
+export const getThreatIntelligence = url => postJson('/api/v1/threat-intelligence', { url });
 
 async function getJson(path, authenticated = false) {
   const response = await fetch(`${API_URL}${path}`, { headers: authenticated ? authHeaders() : {} });

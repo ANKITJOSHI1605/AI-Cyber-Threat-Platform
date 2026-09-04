@@ -8,6 +8,7 @@ def test_normalizes_domain_without_scheme() -> None:
     assert result["normalized_url"] == "https://example.com"
     assert result["risk_score"] == 0
     assert result["verdict"] == "low_risk"
+    assert 0 <= result["features"]["ml_probability"] <= 1
 
 
 def test_flags_ip_host_and_insecure_protocol() -> None:

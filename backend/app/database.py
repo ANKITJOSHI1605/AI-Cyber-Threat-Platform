@@ -3,274 +3,145 @@ import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
-
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", "data/threat_scans.db"))
+USING_POSTGRES = DATABASE_URL.startswith(("postgres://", "postgresql://"))
 
 
-def _connect() -> sqlite3.Connection:
+class Connection:
+    def __init__(self, raw): self.raw = raw
+    def execute(self, sql: str, params=()):
+        if USING_POSTGRES: sql = sql.replace("?", "%s").replace(" COLLATE NOCASE", "")
+        return self.raw.execute(sql, params)
+
+
+def _connect():
+    if USING_POSTGRES:
+        import psycopg
+        from psycopg.rows import dict_row
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DATABASE_PATH)
-    connection.row_factory = sqlite3.Row
+    connection = sqlite3.connect(DATABASE_PATH); connection.row_factory = sqlite3.Row
     return connection
 
 
 @contextmanager
-def database() -> Iterator[sqlite3.Connection]:
-    connection = _connect()
+def database():
+    raw = _connect()
     try:
-        yield connection
-        connection.commit()
-    finally:
-        connection.close()
+        yield Connection(raw); raw.commit()
+    except Exception:
+        raw.rollback(); raise
+    finally: raw.close()
 
 
 def initialize_database() -> None:
-    with database() as connection:
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS scans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                normalized_url TEXT NOT NULL,
-                verdict TEXT NOT NULL,
-                risk_score INTEGER NOT NULL,
-                signals TEXT NOT NULL,
-                features TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS incidents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                severity TEXT NOT NULL,
-                source TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'open',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS security_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                analysis_type TEXT NOT NULL,
-                verdict TEXT NOT NULL,
-                risk_score INTEGER NOT NULL,
-                summary TEXT NOT NULL,
-                signals TEXT NOT NULL,
-                features TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                name TEXT NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'viewer',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                actor_id INTEGER,
-                actor_email TEXT,
-                action TEXT NOT NULL,
-                resource TEXT NOT NULL,
-                details TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+    pk = "BIGSERIAL PRIMARY KEY" if USING_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    with database() as c:
+        c.execute(f"CREATE TABLE IF NOT EXISTS scans (id {pk}, normalized_url TEXT NOT NULL, verdict TEXT NOT NULL, risk_score INTEGER NOT NULL, signals TEXT NOT NULL, features TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS incidents (id {pk}, title TEXT NOT NULL, description TEXT NOT NULL, severity TEXT NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS security_events (id {pk}, analysis_type TEXT NOT NULL, verdict TEXT NOT NULL, risk_score INTEGER NOT NULL, summary TEXT NOT NULL, signals TEXT NOT NULL, features TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS users (id {pk}, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'viewer', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS audit_logs (id {pk}, actor_id BIGINT, actor_email TEXT, action TEXT NOT NULL, resource TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 
 
-def create_user(email: str, name: str, password_hash: str, role: str = "viewer") -> dict:
-    with database() as connection:
-        cursor = connection.execute(
-            "INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, ?)",
-            (email.strip().lower(), name.strip(), password_hash, role),
-        )
-        row = connection.execute("SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
-    return dict(row)
+def _dict(row): return dict(row) if row else None
+def _time_fields(value):
+    for key in ("created_at", "updated_at"):
+        if key in value: value[key] = str(value[key])
+    return value
 
 
-def get_user_by_email(email: str) -> dict | None:
-    with database() as connection:
-        row = connection.execute("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (email.strip(),)).fetchone()
-    return dict(row) if row else None
+def create_user(email, name, password_hash, role="viewer"):
+    try:
+        with database() as c: row = c.execute("INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, ?) RETURNING *", (email.strip().lower(), name.strip(), password_hash, role)).fetchone()
+        return _time_fields(dict(row))
+    except Exception as exc:
+        if exc.__class__.__name__ == "UniqueViolation": raise sqlite3.IntegrityError(str(exc)) from exc
+        raise
 
 
-def get_user_by_id(user_id: int) -> dict | None:
-    with database() as connection:
-        row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    return dict(row) if row else None
+def get_user_by_email(email):
+    with database() as c: row = c.execute("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email.strip(),)).fetchone()
+    return _time_fields(_dict(row)) if row else None
 
 
-def list_users() -> list[dict]:
-    with database() as connection:
-        rows = connection.execute("SELECT id, email, name, role, created_at FROM users ORDER BY id").fetchall()
-    return [dict(row) for row in rows]
+def get_user_by_id(user_id):
+    with database() as c: row = c.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return _time_fields(_dict(row)) if row else None
 
 
-def update_user_role(user_id: int, role: str) -> dict | None:
-    with database() as connection:
-        cursor = connection.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
-        if not cursor.rowcount:
-            return None
-        row = connection.execute("SELECT id, email, name, role, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
-    return dict(row)
+def list_users():
+    with database() as c: rows = c.execute("SELECT id, email, name, role, created_at FROM users ORDER BY id").fetchall()
+    return [_time_fields(dict(row)) for row in rows]
 
 
-def upsert_admin(email: str, name: str, password_hash: str) -> dict:
-    normalized_email = email.strip().lower()
-    with database() as connection:
-        existing = connection.execute(
-            "SELECT id FROM users WHERE email = ? COLLATE NOCASE", (normalized_email,)
-        ).fetchone()
-        if existing:
-            connection.execute(
-                "UPDATE users SET name = ?, password_hash = ?, role = 'admin' WHERE id = ?",
-                (name, password_hash, existing["id"]),
-            )
-            row = connection.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
-        else:
-            cursor = connection.execute(
-                "INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, 'admin')",
-                (normalized_email, name, password_hash),
-            )
-            row = connection.execute("SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
-    return dict(row)
+def update_user_role(user_id, role):
+    with database() as c: row = c.execute("UPDATE users SET role = ? WHERE id = ? RETURNING id, email, name, role, created_at", (role, user_id)).fetchone()
+    return _time_fields(_dict(row)) if row else None
 
 
-def record_audit(action: str, resource: str, actor: dict | None = None, details: str = "") -> None:
-    with database() as connection:
-        connection.execute(
-            "INSERT INTO audit_logs (actor_id, actor_email, action, resource, details) VALUES (?, ?, ?, ?, ?)",
-            (actor["id"] if actor else None, actor["email"] if actor else None, action, resource, details[:1000]),
-        )
+def upsert_admin(email, name, password_hash):
+    normalized = email.strip().lower()
+    with database() as c:
+        row = c.execute("SELECT id FROM users WHERE LOWER(email) = LOWER(?)", (normalized,)).fetchone()
+        if row: result = c.execute("UPDATE users SET name = ?, password_hash = ?, role = 'admin' WHERE id = ? RETURNING *", (name, password_hash, row["id"])).fetchone()
+        else: result = c.execute("INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, 'admin') RETURNING *", (normalized, name, password_hash)).fetchone()
+    return _time_fields(dict(result))
 
 
-def list_audit_logs(limit: int = 100) -> list[dict]:
-    with database() as connection:
-        rows = connection.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(row) for row in rows]
+def record_audit(action, resource, actor=None, details=""):
+    with database() as c: c.execute("INSERT INTO audit_logs (actor_id, actor_email, action, resource, details) VALUES (?, ?, ?, ?, ?)", (actor["id"] if actor else None, actor["email"] if actor else None, action, resource, details[:1000]))
 
 
-def save_scan(result: dict) -> dict:
-    with database() as connection:
-        cursor = connection.execute(
-            """
-            INSERT INTO scans (normalized_url, verdict, risk_score, signals, features)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                result["normalized_url"],
-                result["verdict"],
-                result["risk_score"],
-                json.dumps(result["signals"]),
-                json.dumps(result["features"]),
-            ),
-        )
-        row = connection.execute("SELECT * FROM scans WHERE id = ?", (cursor.lastrowid,)).fetchone()
-    return _deserialize(row)
+def list_audit_logs(limit=100):
+    with database() as c: rows = c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [_time_fields(dict(row)) for row in rows]
 
 
-def list_scans(limit: int = 20) -> list[dict]:
-    with database() as connection:
-        rows = connection.execute(
-            "SELECT * FROM scans ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
-    return [_deserialize(row) for row in rows]
+def _scan(row):
+    result = _time_fields(dict(row)); result["signals"] = json.loads(result["signals"]); result["features"] = json.loads(result["features"]); return result
 
 
-def scan_summary() -> dict[str, int]:
-    with database() as connection:
-        row = connection.execute(
-            """
-            SELECT
-                COUNT(*) AS scanned,
-                SUM(CASE WHEN verdict != 'low_risk' THEN 1 ELSE 0 END) AS threats,
-                SUM(CASE WHEN verdict = 'low_risk' THEN 1 ELSE 0 END) AS safe
-            FROM scans
-            """
-        ).fetchone()
+def save_scan(result):
+    with database() as c: row = c.execute("INSERT INTO scans (normalized_url, verdict, risk_score, signals, features) VALUES (?, ?, ?, ?, ?) RETURNING *", (result["normalized_url"], result["verdict"], result["risk_score"], json.dumps(result["signals"]), json.dumps(result["features"]))).fetchone()
+    return _scan(row)
+
+
+def list_scans(limit=20):
+    with database() as c: rows = c.execute("SELECT * FROM scans ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [_scan(row) for row in rows]
+
+
+def scan_summary():
+    with database() as c: row = c.execute("SELECT COUNT(*) AS scanned, SUM(CASE WHEN verdict != 'low_risk' THEN 1 ELSE 0 END) AS threats, SUM(CASE WHEN verdict = 'low_risk' THEN 1 ELSE 0 END) AS safe FROM scans").fetchone()
     return {key: int(row[key] or 0) for key in ("scanned", "threats", "safe")}
 
 
-def _deserialize(row: sqlite3.Row) -> dict:
-    return {
-        "id": row["id"],
-        "normalized_url": row["normalized_url"],
-        "verdict": row["verdict"],
-        "risk_score": row["risk_score"],
-        "signals": json.loads(row["signals"]),
-        "features": json.loads(row["features"]),
-        "created_at": row["created_at"],
-    }
+def create_incident(payload):
+    with database() as c: row = c.execute("INSERT INTO incidents (title, description, severity, source) VALUES (?, ?, ?, ?) RETURNING *", (payload["title"], payload["description"], payload["severity"], payload["source"])).fetchone()
+    return _time_fields(dict(row))
 
 
-def create_incident(payload: dict) -> dict:
-    with database() as connection:
-        cursor = connection.execute(
-            "INSERT INTO incidents (title, description, severity, source) VALUES (?, ?, ?, ?)",
-            (payload["title"], payload["description"], payload["severity"], payload["source"]),
-        )
-        row = connection.execute("SELECT * FROM incidents WHERE id = ?", (cursor.lastrowid,)).fetchone()
-    return dict(row)
+def list_incidents(limit=50):
+    with database() as c: rows = c.execute("SELECT * FROM incidents ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [_time_fields(dict(row)) for row in rows]
 
 
-def list_incidents(limit: int = 50) -> list[dict]:
-    with database() as connection:
-        rows = connection.execute("SELECT * FROM incidents ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(row) for row in rows]
+def update_incident_status(incident_id, status):
+    with database() as c: row = c.execute("UPDATE incidents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? RETURNING *", (status, incident_id)).fetchone()
+    return _time_fields(dict(row)) if row else None
 
 
-def update_incident_status(incident_id: int, status: str) -> dict | None:
-    with database() as connection:
-        cursor = connection.execute(
-            "UPDATE incidents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, incident_id),
-        )
-        if not cursor.rowcount:
-            return None
-        row = connection.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone()
-    return dict(row)
+def save_security_event(result):
+    with database() as c: row = c.execute("INSERT INTO security_events (analysis_type, verdict, risk_score, summary, signals, features) VALUES (?, ?, ?, ?, ?, ?) RETURNING *", (result["analysis_type"], result["verdict"], result["risk_score"], result["summary"], json.dumps(result["signals"]), json.dumps(result["features"]))).fetchone()
+    event = _time_fields(dict(row)); event["signals"] = json.loads(event["signals"]); event["features"] = json.loads(event["features"]); return event
 
 
-def save_security_event(result: dict) -> dict:
-    with database() as connection:
-        cursor = connection.execute(
-            """INSERT INTO security_events
-            (analysis_type, verdict, risk_score, summary, signals, features)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-            (result["analysis_type"], result["verdict"], result["risk_score"], result["summary"], json.dumps(result["signals"]), json.dumps(result["features"])),
-        )
-        row = connection.execute("SELECT * FROM security_events WHERE id = ?", (cursor.lastrowid,)).fetchone()
-    event = dict(row)
-    event["signals"] = json.loads(event["signals"])
-    event["features"] = json.loads(event["features"])
-    return event
-
-
-def analytics_summary() -> dict:
-    with database() as connection:
-        url_rows = connection.execute("SELECT verdict, COUNT(*) count, AVG(risk_score) average FROM scans GROUP BY verdict").fetchall()
-        event_rows = connection.execute("SELECT analysis_type, verdict, COUNT(*) count, AVG(risk_score) average FROM security_events GROUP BY analysis_type, verdict").fetchall()
-        incident_rows = connection.execute("SELECT severity, status, COUNT(*) count FROM incidents GROUP BY severity, status").fetchall()
-    return {
-        "url_verdicts": [dict(row) for row in url_rows],
-        "event_verdicts": [dict(row) for row in event_rows],
-        "incidents": [dict(row) for row in incident_rows],
-    }
+def analytics_summary():
+    with database() as c:
+        urls = c.execute("SELECT verdict, COUNT(*) count, AVG(risk_score) average FROM scans GROUP BY verdict").fetchall()
+        events = c.execute("SELECT analysis_type, verdict, COUNT(*) count, AVG(risk_score) average FROM security_events GROUP BY analysis_type, verdict").fetchall()
+        incidents = c.execute("SELECT severity, status, COUNT(*) count FROM incidents GROUP BY severity, status").fetchall()
+    return {"url_verdicts": [dict(row) for row in urls], "event_verdicts": [dict(row) for row in events], "incidents": [dict(row) for row in incidents]}

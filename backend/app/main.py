@@ -12,6 +12,7 @@ from .database import analytics_summary, create_incident, create_user, get_user_
 from .schemas import AnalyticsSummary, AuditLog, AuthResponse, EmailAnalysisRequest, Incident, IncidentCreate, IncidentStatusUpdate, LoginRequest, NetworkAnalysisRequest, RegisterRequest, RoleUpdate, ScanRecord, ScanSummary, SecurityAnalysisResponse, URLAnalysisRequest, User
 from .services.security_analyzer import analyze_email, analyze_network_event
 from .services.url_analyzer import analyze_url
+from .services.threat_intelligence import lookup_virustotal
 
 
 app = FastAPI(
@@ -111,6 +112,11 @@ def analyze_url_endpoint(payload: URLAnalysisRequest) -> ScanRecord:
         return ScanRecord(**save_scan(analyze_url(payload.url)))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/threat-intelligence")
+def threat_intelligence(payload: URLAnalysisRequest) -> dict:
+    return lookup_virustotal(payload.url)
 
 
 @app.get("/api/v1/scans", response_model=list[ScanRecord])

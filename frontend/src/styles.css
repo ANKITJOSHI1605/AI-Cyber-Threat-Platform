@@ -57,6 +57,8 @@ form label { display: block; color: #8ea1aa; font-size: 12px; margin-bottom: 8px
 .network-form .check input { width: auto; margin: 0; accent-color: #35dfb0; }
 .network-form > button { grid-column: 1 / -1; }
 .escalate { margin: 0 0 14px; background: #ffb84d; }
+.intel-button { border: 1px solid #28705e; border-radius: 8px; padding: 11px 16px; margin: 0 10px 14px 0; background: #102a25; color: #35dfb0; font-weight: 700; cursor: pointer; }
+.intel-card { margin: 0 0 14px; }.intel-card p:last-child { color: #8ca0a9; margin: 12px 0 0; }
 .incident-list article { display: grid; grid-template-columns: 90px 1fr 130px; gap: 16px; align-items: center; padding: 17px 0; border-top: 1px solid #182a31; }
 .incident-list h3 { margin: 0 0 5px; font-size: 14px; }.incident-list p, .incident-list small { color: #71848e; font-size: 11px; margin: 0; }
 .severity { padding: 6px 8px; border-radius: 99px; text-align: center; text-transform: uppercase; font: 700 9px 'Space Mono'; background: #23343b; }

@@ -1,6 +1,6 @@
 # AI Cyber Threat Intelligence Platform
 
-An explainable full-stack cybersecurity platform for detecting suspicious URLs, scoring risk, and presenting actionable threat signals. It combines a tested FastAPI analysis API with a responsive React operations dashboard.
+An explainable full-stack cybersecurity platform for detecting suspicious URLs, phishing emails and network anomalies, managing incidents, and presenting actionable threat intelligence. It combines FastAPI, React, hybrid rule/ML scoring, PostgreSQL-ready persistence, RBAC, audit logs and optional VirusTotal enrichment.
 
 ## Current milestone
 
@@ -17,20 +17,19 @@ An explainable full-stack cybersecurity platform for detecting suspicious URLs, 
 - Secure registration and login with salted PBKDF2 password hashing
 - Signed expiring access tokens and Viewer/Analyst/Admin role-based access
 - Admin user-role console and persistent security audit trail
+- PostgreSQL production persistence with automatic SQLite fallback for local development
+- Reproducible logistic-regression URL classifier with saved model metadata
+- Optional VirusTotal URL-reputation enrichment
 
 ## Architecture
 
-```text
-        React dashboard
-                |
-                v
-          FastAPI REST API
-                |
-                v
-    URL feature and risk engine
-                |
-                v
- ML classifier + PostgreSQL (roadmap)
+```mermaid
+flowchart TD
+    UI[React SentinelAI dashboard] --> API[FastAPI REST API]
+    API --> ENGINE[Rule + ML analysis engines]
+    API --> DB[(PostgreSQL / SQLite)]
+    API --> VT[VirusTotal API]
+    API --> AUTH[Signed tokens + RBAC]
 ```
 
 ## API
@@ -72,6 +71,7 @@ Other endpoints:
 - `GET /api/v1/auth/me` — current authenticated user
 - `GET /api/v1/users` and `PATCH /users/{id}/role` — Admin role management
 - `GET /api/v1/audit-logs` — Admin security activity trail
+- `POST /api/v1/threat-intelligence` — optional VirusTotal enrichment
 - `POST/PATCH /api/v1/incidents` — Analyst/Admin case management
 - `GET /api/v1/reports/incidents.csv` — Analyst/Admin report export
 - `GET /docs` — Swagger UI
@@ -108,12 +108,24 @@ Backend configuration:
 | `PORT` | Hosted web-service port | `8000` |
 | `CORS_ORIGINS` | Comma-separated frontend URLs | Local Vite URLs |
 | `DATABASE_PATH` | SQLite database file | `data/threat_scans.db` |
+| `DATABASE_URL` | Render PostgreSQL connection URL; enables PostgreSQL automatically | None |
 | `JWT_SECRET` | Stable secret used to sign access tokens | Random per process |
 | `ADMIN_EMAIL` | Creates the initial administrator on startup | None |
 | `ADMIN_PASSWORD` | Initial administrator password (10+ characters) | None |
 | `TOKEN_TTL_SECONDS` | Access-token lifetime | `28800` |
+| `VIRUSTOTAL_API_KEY` | Optional VirusTotal v3 API key | None |
 
 In production, set a long random `JWT_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in the hosting provider. Never commit these values. New registrations always receive the read-only `viewer` role; an Admin can promote users through the API.
+
+## Machine-learning model
+
+The URL engine blends explainable security rules (70%) with a trained logistic-regression probability (30%). The committed model is reproducible:
+
+```bash
+python backend/ml/train_url_model.py
+```
+
+The included 20-row dataset is a small curated educational baseline, not a production benchmark. Replace it with a versioned public phishing dataset and report held-out precision, recall, F1 and ROC-AUC before claiming production accuracy.
 
 ## Tests
 
@@ -135,12 +147,14 @@ docker run -p 8000:8000 cyber-threat-api
 - [x] Docker and continuous integration
 - [x] Build React security dashboard
 - [x] Persist scan history and dashboard statistics
-- [ ] Train and evaluate phishing URL classifier
-- [ ] Migrate SQLite persistence to PostgreSQL for multi-instance hosting
+- [x] Train and integrate an educational phishing URL classifier
+- [x] Add PostgreSQL persistence with SQLite fallback
 - [x] Add signed-token authentication and role-based access
 - [ ] Integrate VirusTotal threat intelligence
 - [x] Add network anomaly-detection module
 - [x] Deploy frontend and API
+- [x] Add optional VirusTotal reputation intelligence
+- [ ] Evaluate the model on a large versioned public dataset
 
 ## Technology stack
 
